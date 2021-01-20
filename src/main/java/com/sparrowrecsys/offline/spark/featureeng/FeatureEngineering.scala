@@ -26,6 +26,7 @@ object FeatureEngineering {
     oneHotEncoderSamples.show(10)
   }
 
+
   val array2vec: UserDefinedFunction = udf { (a: Seq[Int], length: Int) => org.apache.spark.ml.linalg.Vectors.sparse(length, a.sortWith(_ < _).toArray, Array.fill[Double](a.length)(1.0)) }
 
   /**
@@ -34,17 +35,20 @@ object FeatureEngineering {
    */
   def multiHotEncoderExample(samples:DataFrame): Unit ={
     val samplesWithGenre = samples.select(col("movieId"), col("title"),explode(split(col("genres"), "\\|").cast("array<string>")).as("genre"))
-    val genreIndexer = new StringIndexer().setInputCol("genre").setOutputCol("genreIndex")
+    val genreIndexer = new StringIndexer().setInputCol("genre")
+      .setOutputCol("genreIndex")
 
     val stringIndexerModel : StringIndexerModel = genreIndexer.fit(samplesWithGenre)
 
     val genreIndexSamples = stringIndexerModel.transform(samplesWithGenre)
-      .withColumn("genreIndexInt", col("genreIndex").cast(sql.types.IntegerType))
+      .withColumn("genreIndexInt", col("genreIndex")
+        .cast(sql.types.IntegerType))
 
     val indexSize = genreIndexSamples.agg(max(col("genreIndexInt"))).head().getAs[Int](0) + 1
 
     val processedSamples =  genreIndexSamples
-      .groupBy(col("movieId")).agg(collect_list("genreIndexInt").as("genreIndexes"))
+      .groupBy(col("movieId")).agg(collect_list("genreIndexInt")
+      .as("genreIndexes"))
         .withColumn("indexSize", typedLit(indexSize))
 
     val finalSample = processedSamples.withColumn("vector", array2vec(col("genreIndexes"),col("indexSize")))
